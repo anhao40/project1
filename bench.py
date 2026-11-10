@@ -132,7 +132,8 @@ def run_vllm(args, workload):
         dtype=args.dtype,
         gpu_memory_utilization=args.gpu_mem_util,
         max_model_len=4096,
-        enforce_eager=False,
+        # T4(Turing) 上 torch.compile 可能失败，加 --enforce-eager 可跳过编译
+        enforce_eager=args.enforce_eager,
     )
     sampling = SamplingParams(temperature=0, max_tokens=args.out_len)
 
@@ -183,6 +184,8 @@ def main():
     p.add_argument("--out-len", type=int, default=128)
     p.add_argument("--dtype", default="float16", choices=["float16", "bfloat16"])
     p.add_argument("--gpu-mem-util", type=float, default=0.9)
+    p.add_argument("--enforce-eager", action="store_true",
+                   help="vLLM 跳过 torch.compile，T4 等老架构编译失败时用")
     args = p.parse_args()
 
     check_len(args.in_len, args.out_len)
