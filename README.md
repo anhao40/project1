@@ -73,6 +73,17 @@ peak_mem_gb, ttft_ms, tpot_ms, p99_ttft_ms, p99_e2e_ms, note`
 6. **pip 从国内镜像装某个 nvidia 包会卡在同一下载偏移**（实测 `nvidia-cusolver` 卡在 49.3 MB，续传 31 次无果）：
    这是镜像上该文件有问题，不是网络抖动——断点重试永远停在同一个字节。单包换源补装即可，不用重跑全流程：
    `pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ nvidia-cusolver-cu12==<版本>`
+7. **T4 上 prefix caching 跑不了（`vllm==0.10.2` + V0 引擎），E2-c 只测得到关闭档**。两层错，都记下来：
+   - 先报 `AssertionError: libcuda.so cannot found!`：V0 的 prefix cache 靠 Triton kernel 搬 KV block，
+     triton 通过 **ldconfig 缓存**找 `libcuda.so.1`，而容器里 `ldconfig -p` 只有 `libcudart`
+     （nvidia-container-toolkit 注入后没刷新缓存）。修：
+     `echo /usr/lib/x86_64-linux-gnu > /etc/ld.so.conf.d/zz-nvidia.conf && ldconfig`
+   - 修完再报 `triton.runtime.errors.OutOfResources: shared memory, Required: 98304, Hardware limit: 65536`：
+     T4 是 sm75，每 SM 只有 64 KB 共享内存，那个 kernel 要 96 KB。**硬件限制，无解**——
+     开 prefix caching 只在 sm80+（A100 / 4090 / H800）上能测。
+8. **`gpu_mem_util` 不能低于 0.55**：0.5 时 vLLM 直接拒绝启动
+   （`max seq len (4096) is larger than ... KV cache (1232)`）——权重 5.8 GB 吃掉了 8 GB 预算的大半。
+   实测 0.6 / 0.7 / 0.9 三档吞吐分别为 305 / 305 / 300 tok/s，**调高显存占比没有收益**。
 
 模型下载走 ModelScope（`modelscope download --model Qwen/Qwen2.5-3B-Instruct --local_dir /root/models/qwen2.5-3b`）：
 `huggingface_hub` 在本网络下解压阶段会报 `TypeError: process() takes no keyword arguments`。

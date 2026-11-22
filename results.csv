@@ -39,3 +39,13 @@ run_id,ts,exp,backend,model,quant,n_req,in_len,out_len,batch,max_num_seqs,gpu_me
 1122-2210-E2-a-vllm-b32-s32-r1,2026-11-22 22:11:18,E2-a,vllm,qwen2.5-3b,none,32,512,128,32,32,0.9,0,1,11.218,365.12,13.08,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
 1122-2211-E2-d-vllm-b32-sd-r0,2026-11-22 22:12:17,E2-d,vllm,qwen2.5-3b,fp16,32,512,128,32,default,0.9,0,0,10.67,383.87,11.99,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
 1122-2211-E2-d-vllm-b32-sd-r1,2026-11-22 22:12:28,E2-d,vllm,qwen2.5-3b,fp16,32,512,128,32,default,0.9,0,1,10.816,378.69,11.99,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2215-E2-b-vllm-b16-sd-r0,2026-11-22 22:15:53,E2-b,vllm,qwen2.5-3b,none,16,512,128,16,default,0.7,0,0,6.684,306.42,9.08,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2215-E2-b-vllm-b16-sd-r1,2026-11-22 22:15:59,E2-b,vllm,qwen2.5-3b,none,16,512,128,16,default,0.7,0,1,6.761,302.92,9.08,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2216-E2-b-vllm-b16-sd-r0,2026-11-22 22:16:54,E2-b,vllm,qwen2.5-3b,none,16,512,128,16,default,0.9,0,0,6.788,301.7,11.99,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2216-E2-b-vllm-b16-sd-r1,2026-11-22 22:17:01,E2-b,vllm,qwen2.5-3b,none,16,512,128,16,default,0.9,0,1,6.851,298.92,11.99,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2217-E2-c-vllm-b16-sd-r0,2026-11-22 22:17:56,E2-c,vllm,qwen2.5-3b,none,16,512,128,16,default,0.9,0,0,6.842,299.34,11.99,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2217-E2-c-vllm-b16-sd-r1,2026-11-22 22:18:03,E2-c,vllm,qwen2.5-3b,none,16,512,128,16,default,0.9,0,1,6.904,296.62,11.99,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2257-E2-b-vllm-b16-sd-r0,2026-11-22 22:58:17,E2-b,vllm,qwen2.5-3b,none,16,512,128,16,default,0.6,0,0,6.694,305.95,7.62,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2257-E2-b-vllm-b16-sd-r1,2026-11-22 22:58:24,E2-b,vllm,qwen2.5-3b,none,16,512,128,16,default,0.6,0,1,6.715,305.01,7.62,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2259-E2-d-vllm-b32-sd-r0,2026-11-22 23:00:13,E2-d,vllm,qwen2.5-3b-awq,awq,32,512,128,32,default,0.9,0,0,10.992,372.63,12.03,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
+1122-2259-E2-d-vllm-b32-sd-r1,2026-11-22 23:00:24,E2-d,vllm,qwen2.5-3b-awq,awq,32,512,128,32,default,0.9,0,1,11.251,364.07,12.03,,,,,Tesla T4; torch=2.8.0+cu128; vllm=0.10.2; repeat=2; continuous batching
