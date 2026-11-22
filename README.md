@@ -121,7 +121,6 @@ python plot.py --exp E1                # 出图到 figs/，同时打印中位数
 - [ ] **P4 收敛**：图、报告、一键复现脚本
 
 ## 结果（P0，batch=1，in=512/out=128）
-
 | backend | throughput (tok/s) | latency (s) | peak_mem (GB) |
 |---|---|---|---|
 | hf | 23.17 | 5.52 | 5.83 |
@@ -136,6 +135,31 @@ vLLM 启动日志中的可用事实（报告素材）：
 - `Maximum concurrency for 4096 tokens per request: 41.73x` → KV 池可容纳的满长并发上限
 - `# cuda blocks: 10682` → PagedAttention 的物理块数
 - KV cache 5.87 GiB vs 权重 5.79 GiB → 权重与 KV 各占一半
+
+## 量化到底省了什么：KV 池 vs 吞吐（E2-d 的补充证据）
+
+同一台 T4、同一 `gpu_memory_utilization=0.9`、同一 `max_model_len=4096`，只换权重：
+
+| | 权重 | KV 池 | 4096 满长并发上限 | 32 条请求吞吐 |
+|---|---|---|---|---|
+| FP16 | 5.79 GiB | 5.87 GiB | **41.73×** | 381.3 tok/s |
+| AWQ-Int4 | **1.95 GiB** | **9.71 GiB** | **69.02×** | 368.4 tok/s（−3.4%） |
+
+结论：量化的收益**不在 token 吞吐**（T4 上反而降 3.4%——Int4 的解量化要吃算力），
+而在于**同样显存装得下多 65% 的并发请求**：权重省下的 3.84 GiB 全部转成了 KV 池。
+
+⚠️ 这个收益**在 `peak_mem_gb` 列里完全看不出来**。vLLM 按 `gpu_mem_util` 预分配，
+两种精度都吃到 12 GB 左右（12.03 vs 11.99）。要证明量化的价值，必须引用启动日志里的
+`Maximum concurrency for 4096 tokens per request`，不能用峰值显存——用峰值会得出"量化没用"的错误结论。
+
+抓取方式：单独起一次引擎并过滤日志（每次约 30 秒）
+
+```bash
+VLLM_USE_V1=0 python -c "
+from vllm import LLM
+LLM(model='/root/models/qwen2.5-3b-awq', dtype='float16', gpu_memory_utilization=0.9, max_model_len=4096)
+" 2>&1 | grep -E "model weights take|Maximum concurrency"
+```
 
 ## 协作约定
 
