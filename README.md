@@ -11,15 +11,43 @@
 ## 目录结构
 
 ```
-bench.py          双后端基准测试，输出 results.csv
-plot.py           读 results.csv 画吞吐/显存图
-serve.sh          启动 vLLM 的 OpenAI 兼容服务（供 TTFT/TPOT 测量）
-stream_client.py  流式客户端，测 TTFT / TPOT
+run_all.sh        一键复现 E1→E3（支持 --dry-run 空跑，本地无卡也能核对命令）
+bench.py          双后端基准测试（E1 基线 / E2 消融），输出 results.csv
+load_client.py    E3 并发压测：固定到达速率，测 TTFT / TPOT / P50 / P99
+plot.py           按 --exp 出图，重复实验自动取中位数
+serve.sh          启动 vLLM 的 OpenAI 兼容服务（第三个参数 = max_num_seqs）
+stream_client.py  单请求 TTFT/TPOT 手测（快速验服务用，E3 用 load_client.py）
 setup.sh          一台新机器上的环境准备（版本已钉死，含踩坑备注）
 PLAN.md           完整项目计划：目标、实验矩阵、阶段任务、分工
-results.csv       实验数据（每跑一次追加）
+分工.md           角色与任务板（谁做什么、做到什么算完成）
+results_p0.csv    P0 的 2 行基线数据（表结构升级前的存档，不再追加）
+results.csv       实验数据（每跑一次追加，22 列，见下）
 env.txt           pip freeze 快照，报告「实验环境」一节用
 ```
+
+## 实验矩阵（跑之前先看这张表）
+
+| exp | 命令关键参数 | 回答什么问题 |
+|---|---|---|
+| **E1** | `--batch 1 2 4 8 16` | HF 与 vLLM 差多少？差距随并发怎么变？ |
+| **E2-a** | `--n-req 32 --max-num-seqs 1/4/16/32` | 连续批处理贡献多少（32 条一次性提交，靠调度器限流） |
+| **E2-b** | `--gpu-mem-util 0.5/0.7/0.9` | 显存换并发：KV 池大一点换来什么 |
+| **E2-c** | `--system-prompt-len 480 [--prefix-cache]` | 前缀共享的收益（480 共享 + 32 差异） |
+| **E2-d** | `--model ...-awq --quant awq` | Int4 量化的收益：显存降、并发涨 |
+| **E3** | `serve.sh ... <k>` + `load_client.py --max-num-seqs <k>` | 吞吐-延迟在哪拐弯，单卡最优 k |
+
+**E1 与 E2-a 的区别（最容易搞混）**：E1 是静态批，`--batch` 就是并发数，vLLM 一次只看见 B 条
+请求；E2-a 是固定 32 条请求一次性提交，`max_num_seqs` 才是并发上限。两者不可互换。
+
+### results.csv 的列
+
+`run_id, ts, exp, backend, model, quant, n_req, in_len, out_len, batch,
+max_num_seqs, gpu_mem_util, prefix_cache, rep, latency_s, throughput_tok_s,
+peak_mem_gb, ttft_ms, tpot_ms, p99_ttft_ms, p99_e2e_ms, note`
+
+- `rep`：同配置的第几遍（默认 3 遍，分析时取中位数）
+- `ttft/tpot/p99`：只有 E3（`load_client.py`）会填，E1/E2 留空
+- 表头变了以后**不能**往旧 csv 追加：脚本会直接报错并提示归档（这是故意的）
 
 ## 实验环境（实测可用组合）
 
@@ -44,15 +72,28 @@ env.txt           pip freeze 快照，报告「实验环境」一节用
 ## 快速开始
 
 ```bash
-bash setup.sh                                        # 装环境 + 下模型（新机器跑一次）
-python bench.py --backend hf   --model /root/models/qwen2.5-3b --batch 1 2 4 8 16
-VLLM_USE_V1=0 python bench.py --backend vllm --model /root/models/qwen2.5-3b --batch 1 2 4 8 16
-python plot.py                                       # 出图
+bash setup.sh                          # 装环境 + 下模型（新机器跑一次，约 30~40 分钟）
+
+# 方式一：全自动（上机就用这个，一条命令跑完 E1→E3）
+bash run_all.sh --dry-run              # 先空跑，核对参数拼得对不对
+bash run_all.sh                        # 真跑；SKIP_E2B=1 SKIP_E3=1 可跳过大项
+
+# 方式二：单步（调参/补跑时用）
+python bench.py --backend hf   --model /root/models/qwen2.5-3b --batch 1 2 4 8 16 --repeat 3 --exp E1
+VLLM_USE_V1=0 python bench.py --backend vllm --model /root/models/qwen2.5-3b --batch 1 2 4 8 16 --repeat 3 --exp E1
+VLLM_USE_V1=0 python bench.py --backend vllm --model /root/models/qwen2.5-3b \
+    --batch 32 --n-req 32 --max-num-seqs 8 --repeat 2 --exp E2-a
+python plot.py --exp E1                # 出图到 figs/，同时打印中位数表
 ```
+
+**机时纪律**：开机 → `bash run_all.sh` → 收数据 → 关机。别开机后再想跑什么。
+`--repeat 3` 是在**同一个进程内**跑三遍，省掉两次模型加载（每次约 40 秒）。
 
 ## 进度
 
 - [x] **P0 环境跑通**：两个后端均能出数（2026-11-10）
+- [x] **工具链就绪**：`--max-num-seqs` / `--repeat` / `--prefix-cache` / `--system-prompt-len`、
+      固定输出长度、CSV 记录实验变量、`plot.py --exp`、`load_client.py`、`run_all.sh`（2026-11-22）
 - [ ] **P1 E1 基线对比**：batch 1/2/4/8/16 两条曲线 + 带宽理论值对比
 - [ ] **P2 E2 归因消融**：max_num_seqs / gpu_mem_util / prefix_cache / 量化
 - [ ] **P3 E3 权衡曲线**：吞吐 vs P99 延迟，找拐点
