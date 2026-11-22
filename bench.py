@@ -310,7 +310,7 @@ def main():
     launch = time.strftime("%m%d-%H%M")
 
     print(f"负载: in={args.in_len} out={args.out_len} batches={args.batch_sizes} "
-          f"n_req={args.n_req or '=batch'} repeat={args.repeat} "
+          f"n_req={args.n_req or 'batch(默认)'} repeat={args.repeat} "
           f"prefix={args.system_prompt_len or 'none'} backend={args.backend} exp={args.exp}")
 
     workload = make_workload(need, args.in_len, prefix_len=args.system_prompt_len,

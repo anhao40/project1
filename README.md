@@ -11,8 +11,9 @@
 ## 目录结构
 
 ```
-run_all.sh        一键复现 E1→E3（支持 --dry-run 空跑，本地无卡也能核对命令）
-bench.py          双后端基准测试（E1 基线 / E2 消融），输出 results.csv
+run_all.sh         一键复现 E1→E3（支持 --dry-run 空跑，本地无卡也能核对命令）
+install_venv.sh    容器盘配额小时用：venv + 模型都装到大容量挂载盘（见「环境六坑」第 5 条）
+bench.py           双后端基准测试（E1 基线 / E2 消融），输出 results.csv
 load_client.py    E3 并发压测：固定到达速率，测 TTFT / TPOT / P50 / P99
 plot.py           按 --exp 出图，重复实验自动取中位数
 serve.sh          启动 vLLM 的 OpenAI 兼容服务（第三个参数 = max_num_seqs）
@@ -59,12 +60,19 @@ peak_mem_gb, ttft_ms, tpot_ms, p99_ttft_ms, p99_e2e_ms, note`
 | 关键版本 | `vllm==0.10.2` / `torch 2.8.0+cu128` / `transformers==4.55.2` / `numpy 2.2.6` |
 | 负载 | 合成 token id，输入 512 / 输出 128 |
 
-### 环境四坑（已解决，勿重犯）
+### 环境六坑（已解决，勿重犯）
 
 1. **vLLM 0.3x 装不上**：它依赖 cu13 的 torch，T4 驱动只到 12.8 → `The NVIDIA driver on your system is too old`。必须钉 `vllm==0.10.2`。
 2. **V1 引擎起不来**：容器内 `Engine core initialization failed`。跑 vLLM 必须 `VLLM_USE_V1=0`（用 V0 引擎）。
 3. **transformers 5.x 不兼容**：删了 `all_special_tokens_extended`，vLLM 0.10 报 `AttributeError`。钉 `4.55.2`。
 4. **numpy ABI 冲突**：scipy / sklearn 若为 numpy1 编译的旧版，import 时 `numpy.core.multiarray failed to import`。需 `pip install -U scipy scikit-learn pandas`。
+5. **容器可写层配额比 `df` 小得多，装 torch 会 ENOSPC**（2026-11-22 实测，BayesDL T4）：
+   `df -h /` 报 51G 可用，但 `fallocate -l 10G` 直接失败；`/opt/conda` 有 7.3G 却在只读镜像层里、不计入 `df` 的 used。
+   torch 2.8 那套解压约 7G，装进 `/opt/conda` 必炸，报错伪装成下载问题（`[Errno 28] No space left on device`）。
+   **解法：用 `install_venv.sh` 把 venv 和模型都放到大容量挂载盘（如 `/root/bayes-tmp`，50G），并加 `PIP_NO_CACHE_DIR=1` 避免缓存与解压双份占盘。**
+6. **pip 从国内镜像装某个 nvidia 包会卡在同一下载偏移**（实测 `nvidia-cusolver` 卡在 49.3 MB，续传 31 次无果）：
+   这是镜像上该文件有问题，不是网络抖动——断点重试永远停在同一个字节。单包换源补装即可，不用重跑全流程：
+   `pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ nvidia-cusolver-cu12==<版本>`
 
 模型下载走 ModelScope（`modelscope download --model Qwen/Qwen2.5-3B-Instruct --local_dir /root/models/qwen2.5-3b`）：
 `huggingface_hub` 在本网络下解压阶段会报 `TypeError: process() takes no keyword arguments`。
@@ -73,6 +81,8 @@ peak_mem_gb, ttft_ms, tpot_ms, p99_ttft_ms, p99_e2e_ms, note`
 
 ```bash
 bash setup.sh                          # 装环境 + 下模型（新机器跑一次，约 30~40 分钟）
+# 若容器可写层配额小、setup.sh 报 No space left on device：
+bash install_venv.sh                   # venv 和模型都放数据盘，之后用 $ROOT/venv/bin/python
 
 # 方式一：全自动（上机就用这个，一条命令跑完 E1→E3）
 bash run_all.sh --dry-run              # 先空跑，核对参数拼得对不对

@@ -22,8 +22,16 @@ MODEL_DIR=${2:-/root/models/qwen2.5-3b}
 
 echo "== 1/4 安装依赖（钉版本）=="
 pip install -U pip
-pip install "vllm==0.10.2" "transformers==4.55.2" accelerate matplotlib openai
-pip install -U scipy scikit-learn pandas
+# 2026-11-22 实测：清华源下 nvidia-cusolver（267MB）会反复断流，pip 默认只重试 6 次就放弃
+# （报 error: incomplete-download）。加长超时 + 断点续传重试次数。
+# 用环境变量 PIP_RESUME_RETRIES 而不是命令行参数：老版本 pip 不认识该参数会直接报错，
+# 不认识环境变量则静默忽略。
+PIP_RESUME_RETRIES=30 pip install --timeout 120 --retries 5 \
+  "vllm==0.10.2" "transformers==4.55.2" accelerate matplotlib openai
+PIP_RESUME_RETRIES=30 pip install --timeout 120 --retries 5 -U scipy scikit-learn pandas
+# 若某个 nvidia-* 包反复断在同一下载偏移（2026-11-22 实际遇到 cusolver 卡在 49.3MB，
+# 续传 31 次无果），说明镜像上那个文件有问题，单独换源补装即可，不用重跑全流程：
+#   pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ nvidia-cusolver-cu12==<版本>
 
 echo "== 2/4 环境变量 =="
 grep -q "VLLM_USE_V1" ~/.bashrc || echo "export VLLM_USE_V1=0" >> ~/.bashrc
