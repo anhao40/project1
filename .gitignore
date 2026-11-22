@@ -22,3 +22,9 @@ Thumbs.db
 # 编辑器
 .vscode/
 .idea/
+
+# run_all.sh 的输出目录（日志/数据副本，不进仓库）
+results/
+
+# 本地临时自检
+.dryrun/
