@@ -75,7 +75,8 @@ done
 # ---------- E2-b 显存换并发 ----------
 if [ "$SKIP_E2B" = 0 ]; then
   say "== E2-b 显存利用率扫描（gpu_mem_util）=="
-  for u in 0.5 0.7 0.9; do
+  # 0.5 不可用：KV 池只装得下 1232 token < max_model_len 4096（见 README 环境坑 8）
+  for u in 0.6 0.7 0.9; do
     bench vllm --batch 32 --n-req 32 --gpu-mem-util "$u" --repeat 2 --exp E2-b
   done
 else
@@ -86,7 +87,10 @@ fi
 if [ "$SKIP_E2C" = 0 ]; then
   say "== E2-c 前缀共享（480 共享 + 32 差异，开/关 prefix cache）=="
   bench vllm --batch 32 --n-req 32 --system-prompt-len 480 --repeat 2 --exp E2-c
-  bench vllm --batch 32 --n-req 32 --system-prompt-len 480 --prefix-cache --repeat 2 --exp E2-c
+  # sm75（T4）上这条会因 Triton kernel 要 96KB shared memory 而崩（硬件限制，README 坑 7）
+  # 加容错，别让一键复现死在这里
+  bench vllm --batch 32 --n-req 32 --system-prompt-len 480 --prefix-cache --repeat 2 --exp E2-c \
+    || say "prefix cache 开启失败（sm75 硬件限制），关闭档数据已保留"
 else
   say "SKIP_E2C=1，跳过 E2-c"
 fi
