@@ -16,11 +16,14 @@ install_venv.sh    容器盘配额小时用：venv + 模型都装到大容量挂
 bench.py           双后端基准测试（E1 基线 / E2 消融），输出 results.csv
 load_client.py    E3 并发压测：固定到达速率，测 TTFT / TPOT / P50 / P99
 plot.py           按 --exp 出图，重复实验自动取中位数
+waterfall.py      归因瀑布图（递进链条，读 attribution_steps.csv）
+attribution_steps.csv  瀑布图的步骤表（数值来自 results.csv 中位数）
 serve.sh          启动 vLLM 的 OpenAI 兼容服务（第三个参数 = max_num_seqs）
 stream_client.py  单请求 TTFT/TPOT 手测（快速验服务用，E3 用 load_client.py）
 setup.sh          一台新机器上的环境准备（版本已钉死，含踩坑备注）
 PLAN.md           完整项目计划：目标、实验矩阵、阶段任务、分工
 分工.md           角色与任务板（谁做什么、做到什么算完成）
+docs/             论文笔记（vLLM/Orca/AWQ）、报告骨架与初稿、PPT 填数指南
 results_p0.csv    P0 的 2 行基线数据（表结构升级前的存档，不再追加）
 results.csv       实验数据（每跑一次追加，22 列，见下）
 env.txt           pip freeze 快照，报告「实验环境」一节用
@@ -32,8 +35,8 @@ env.txt           pip freeze 快照，报告「实验环境」一节用
 |---|---|---|
 | **E1** | `--batch 1 2 4 8 16` | HF 与 vLLM 差多少？差距随并发怎么变？ |
 | **E2-a** | `--n-req 32 --max-num-seqs 1/4/16/32` | 连续批处理贡献多少（32 条一次性提交，靠调度器限流） |
-| **E2-b** | `--gpu-mem-util 0.5/0.7/0.9` | 显存换并发：KV 池大一点换来什么 |
-| **E2-c** | `--system-prompt-len 480 [--prefix-cache]` | 前缀共享的收益（480 共享 + 32 差异） |
+| **E2-b** | `--gpu-mem-util 0.6/0.7/0.9` | 显存换并发：KV 池大一点换来什么（0.5 档在 T4 上会崩，已跳过） |
+| **E2-c** | `--system-prompt-len 480 [--prefix-cache]` | 前缀共享的收益；T4 共享内存不足（96KB > 64KB），不可测 |
 | **E2-d** | `--model ...-awq --quant awq` | Int4 量化的收益：显存降、并发涨 |
 | **E3** | `serve.sh ... <k>` + `load_client.py --max-num-seqs <k>` | 吞吐-延迟在哪拐弯，单卡最优 k |
 
@@ -115,19 +118,48 @@ python plot.py --exp E1                # 出图到 figs/，同时打印中位数
 - [x] **P0 环境跑通**：两个后端均能出数（2026-11-10）
 - [x] **工具链就绪**：`--max-num-seqs` / `--repeat` / `--prefix-cache` / `--system-prompt-len`、
       固定输出长度、CSV 记录实验变量、`plot.py --exp`、`load_client.py`、`run_all.sh`（2026-11-22）
-- [ ] **P1 E1 基线对比**：batch 1/2/4/8/16 两条曲线 + 带宽理论值对比
-- [ ] **P2 E2 归因消融**：max_num_seqs / gpu_mem_util / prefix_cache / 量化
-- [ ] **P3 E3 权衡曲线**：吞吐 vs P99 延迟，找拐点
-- [ ] **P4 收敛**：图、报告、一键复现脚本
+- [x] **P1 E1 基线对比**：双后端 × batch 1/2/4/8/16 × 3 遍，曲线 + 带宽理论值对比（2026-11-23）
+- [x] **P2 E2 归因消融**：连续批 / 显存 / 前缀缓存（T4 不可测）/ 量化（2026-11-23）
+- [x] **P3 E3 权衡曲线**：轻载 + 过载两工况，拐点取决于负载（2026-11-23）
+- [ ] **P4 收敛**：图已齐（8 张 + 瀑布图），报告初稿已写，PPT 待拼装
 
-## 结果（P0，batch=1，in=512/out=128）
-| backend | throughput (tok/s) | latency (s) | peak_mem (GB) |
-|---|---|---|---|
-| hf | 23.17 | 5.52 | 5.83 |
-| vllm | 34.18 | 3.74 | 11.72 |
+## 结果（E1，3 遍中位数，in=512/out=128）
 
-理论上限参考：权重 5.79 GiB ÷ 320 GB/s ≈ 18 ms/token ≈ 55 tok/s（单请求 decode 的带宽天花板），
-实测 HF 23 tok/s 约为上限的四成，差距即后续归因对象。
+| batch | HF tok/s | vLLM tok/s | vLLM/HF | HF 峰值 GB | vLLM 峰值 GB |
+|---|---|---|---|---|---|
+| 1 | 22.38 | 32.99 | 1.5× | 5.84 | 11.72 |
+| 2 | 42.09 | 61.52 | 1.5× | 5.92 | 11.76 |
+| 4 | 66.85 | 112.01 | 1.7× | 6.08 | 11.83 |
+| 8 | 91.64 | 187.71 | 2.0× | 6.40 | 11.99 |
+| 16 | 113.36 | 291.39 | 2.6× | 7.04 | 11.99 |
+
+- 带宽理论上限：权重 5.79 GiB ÷ 320 GB/s ≈ 18 ms/token ≈ 55 tok/s；
+  HF batch=1 实测 22.38 tok/s ≈ 上限的 **41%**。
+- 差距随并发扩大（1.5× → 2.6×）：增益来自调度与显存管理，不是单请求加速。
+- HF 显存随 batch 线性涨；vLLM 基本被 KV 池顶住（预分配占用，不是需求）。
+
+### 归因（E2，以 HF 为基线的递进链条）
+
+| 级 | 吞吐 tok/s | 增量 |
+|---|---|---|
+| HF 静态批 batch=16 | 113.36 | 基线 |
+| + vLLM 引擎（kernel + 分页 KV + 调度） | 291.39 | +178.03（2.6×） |
+| + 提高并发（16→32 条请求，k=32） | 372.66 | +81.27（较上一级 +27.9%） |
+
+> 单变量看，E2-a 的 K=1→32 是 **13.5×**；链条第二级只有 +27.9%，
+> 因为第一级 vLLM 已经在做连续批，第二级只增加并发上限，不是从 0 开启连续批。
+
+- **E2-a**（32 条请求，K=1→32）：27.69 → 372.66 tok/s，**13.5×**，几乎全部增益。
+- **E2-b**（gpu_mem_util 0.6/0.7/0.9）：305.48 / 304.67 / 300.31 tok/s，**贡献 ≈ 0**。
+- **E2-d**（AWQ-Int4）：吞吐 −3.4%；收益是并发上限（见下节）。
+- **E2-c**（前缀共享）：T4 不可测（shared memory 98304 > 65536），如实标注。
+- 瀑布图：`figs/attribution_waterfall.png`（`waterfall.py` + `attribution_steps.csv`）。
+
+### E3 权衡：拐点取决于负载
+
+- **轻载**（4 req/s，32 条）：无拐点，k=32 全面最优（吞吐 308.92 tok/s，TTFT 0.17 s）。
+- **过载**（16 req/s，64 条）：边际增益 +69% → +54% → +32%，饱和点接近 FP16 并发上限 41.7×
+  （AWQ 为 69×）。不存在固定的"单卡最优配置"。
 
 vLLM 启动日志中的可用事实（报告素材）：
 
@@ -149,7 +181,7 @@ vLLM 启动日志中的可用事实（报告素材）：
 而在于**同样显存装得下多 65% 的并发请求**：权重省下的 3.84 GiB 全部转成了 KV 池。
 
 ⚠️ 这个收益**在 `peak_mem_gb` 列里完全看不出来**。vLLM 按 `gpu_mem_util` 预分配，
-两种精度都吃到 12 GB 左右（12.03 vs 11.99）。要证明量化的价值，必须引用启动日志里的
+两种精度都吃到 12 GB 左右（FP16 11.99 / AWQ 12.03）。要证明量化的价值，必须引用启动日志里的
 `Maximum concurrency for 4096 tokens per request`，不能用峰值显存——用峰值会得出"量化没用"的错误结论。
 
 抓取方式：单独起一次引擎并过滤日志（每次约 30 秒）
@@ -166,5 +198,5 @@ LLM(model='/root/models/qwen2.5-3b-awq', dtype='float16', gpu_memory_utilization
 1. 实验是串行的：跑之前先 `nvidia-smi` 看有没有人在跑，在群里说一句「我开始跑 E1」。
 2. 长任务一律放 tmux（`tmux new -s exp`，`Ctrl+b d` 脱离，`tmux attach -t exp` 接回）。
 3. 每次实验结束当天把 `results.csv` 拉回本地并提交，服务器不是长期存储。
-4. 一次只改一个变量；每组跑 3 次取中位数；先 warmup 再计时。
+4. 一次只改一个变量；E1 跑 3 次、E2/E3 跑 2 次，取中位数；先 warmup 再计时。
 5. 提交信息格式：`exp: E1 batch 1-16 (hf, vllm)` / `feat: bench 支持 max_num_seqs` / `docs: README`。

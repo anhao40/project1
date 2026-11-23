@@ -1,0 +1,5 @@
+label,value,kind
+HF static batch=16 (baseline),113.36,base
++ vLLM engine (kernel + paged KV + scheduling),178.03,delta
++ Higher concurrency (16 -> 32 req / k=32),81.27,delta
+vLLM (32 req / max_num_seqs=32),372.66,total
