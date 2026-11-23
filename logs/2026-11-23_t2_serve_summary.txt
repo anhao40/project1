@@ -1,0 +1,21 @@
+===== k=8 =====
+INFO 11-23 16:10:06 [model_runner.py:1083] Model loading took 5.7916 GiB and 3.640589 seconds
+INFO 11-23 16:10:08 [executor_base.py:114] # cuda blocks: 12646, # CPU blocks: 7281
+INFO 11-23 16:10:08 [executor_base.py:119] Maximum concurrency for 4096 tokens per request: 49.40x
+-- runtime (last 2) --
+INFO 11-23 16:11:19 [metrics.py:398] Avg prompt throughput: 510.7 tokens/s, Avg generation throughput: 127.7 tokens/s, Running: 5 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 1.4%, CPU KV cache usage: 0.0%.
+INFO 11-23 16:11:24 [metrics.py:398] Avg prompt throughput: 509.0 tokens/s, Avg generation throughput: 127.7 tokens/s, Running: 5 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 1.4%, CPU KV cache usage: 0.0%.
+===== k=16 =====
+INFO 11-23 16:12:13 [model_runner.py:1083] Model loading took 5.7916 GiB and 3.555727 seconds
+INFO 11-23 16:12:15 [executor_base.py:114] # cuda blocks: 12646, # CPU blocks: 7281
+INFO 11-23 16:12:15 [executor_base.py:119] Maximum concurrency for 4096 tokens per request: 49.40x
+-- runtime (last 2) --
+INFO 11-23 16:13:26 [metrics.py:398] Avg prompt throughput: 510.5 tokens/s, Avg generation throughput: 128.0 tokens/s, Running: 5 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 1.4%, CPU KV cache usage: 0.0%.
+INFO 11-23 16:13:31 [metrics.py:398] Avg prompt throughput: 510.4 tokens/s, Avg generation throughput: 127.8 tokens/s, Running: 5 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 1.4%, CPU KV cache usage: 0.0%.
+===== k=32 =====
+INFO 11-23 16:14:21 [model_runner.py:1083] Model loading took 5.7916 GiB and 3.584155 seconds
+INFO 11-23 16:14:23 [executor_base.py:114] # cuda blocks: 12646, # CPU blocks: 7281
+INFO 11-23 16:14:23 [executor_base.py:119] Maximum concurrency for 4096 tokens per request: 49.40x
+-- runtime (last 2) --
+INFO 11-23 16:15:35 [metrics.py:398] Avg prompt throughput: 510.5 tokens/s, Avg generation throughput: 128.0 tokens/s, Running: 5 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 1.5%, CPU KV cache usage: 0.0%.
+INFO 11-23 16:15:40 [metrics.py:398] Avg prompt throughput: 509.1 tokens/s, Avg generation throughput: 127.7 tokens/s, Running: 5 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 1.5%, CPU KV cache usage: 0.0%.
