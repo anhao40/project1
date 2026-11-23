@@ -44,6 +44,8 @@ vLLM 在此之上沿用了 Orca 的 iteration-level scheduling（连续批处理
 - vLLM 启动日志里的 `# cuda blocks: 10682`、`Maximum concurrency ... 41.73x`
   就是分页池的物理块数与满长并发上限，可直接作报告素材；AWQ 下该上限升到 69.02x
   （KV 池 5.87 → 9.71 GiB），这是量化收益的正确证据（见 E2-d）。
+- **配置注意**：`max_num_seqs` 会改变 KV 池——k≤32 时为 6.95 GiB / 12646 blocks / 49.40×，
+  与默认配置的 5.87 GiB / 41.73× 不同；比较并发上限时必须注明是哪套配置。
 
 ## 出处
 
