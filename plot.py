@@ -8,7 +8,9 @@
   python plot.py --exp E2-b      → 吞吐 vs gpu_memory_utilization
   python plot.py --exp E2-c      → 前缀缓存 开/关 对比
   python plot.py --exp E2-d      → FP16 vs AWQ 对比
-  python plot.py --exp E3        → 吞吐 vs P99 端到端延迟（权衡曲线）
+  python plot.py --exp E3        → 中载：吞吐 vs P99 端到端延迟
+  python plot.py --exp E3b       → 过载：吞吐 vs P99 端到端延迟
+  python plot.py --exp E3-low    → 欠载：吞吐 vs P99 端到端延迟
 
 聚合口径：同一 (backend, batch, max_num_seqs, ...) 的多遍重复取**中位数**，不取均值——
 GPU 抖动大，均值会被单次离群值拽走。E1 的三遍重复就是靠这里收成一条线的。
@@ -174,7 +176,7 @@ def fig_compare(df, col, tag, xlabel, color_map=None):
 
 # ---------- E3：权衡曲线 ----------
 
-def fig_tradeoff(df, fname="tradeoff.png"):
+def fig_tradeoff(df, fname="tradeoff.png", title=None, zero_base=False, note=None):
     if "p99_e2e_ms" not in df.columns or not df["p99_e2e_ms"].notna().any():
         raise SystemExit("E3 的行没有 p99_e2e_ms，先跑 load_client.py")
 
@@ -190,7 +192,12 @@ def fig_tradeoff(df, fname="tradeoff.png"):
                         textcoords="offset points", xytext=(6, 4), fontsize=8)
     ax.set_xlabel("P99 end-to-end latency (ms)")
     ax.set_ylabel("Throughput (tokens/s)")
-    ax.set_title("Throughput vs tail latency (trade-off)")
+    ax.set_title(title or "Throughput vs tail latency (trade-off)")
+    if zero_base:
+        y_max = float(df["throughput_tok_s"].max())
+        ax.set_ylim(0, y_max * 1.15)
+    if note:
+        ax.text(0.02, 0.95, note, transform=ax.transAxes, va="top", fontsize=8)
     ax.grid(alpha=0.3)
     ax.legend()
     save(fig, fname)
@@ -199,7 +206,7 @@ def fig_tradeoff(df, fname="tradeoff.png"):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--exp", default="E1",
-                   help="要画的实验：E1 / E2-a / E2-b / E2-c / E2-d / E3")
+                   help="要画的实验：E1 / E2-a / E2-b / E2-c / E2-d / E3 / E3b / E3-low")
     args = p.parse_args()
 
     df = load(args.exp)
@@ -221,6 +228,13 @@ def main():
     elif args.exp == "E3b":
         # 过载工况：高到达速率、更多请求，用来暴露"延迟爆炸"的拐点
         fig_tradeoff(df, "tradeoff_overload.png")
+    elif args.exp == "E3-low":
+        # 真欠载：rate=1，k=8/16/32；延迟由服务时间而非排队决定
+        # 三档差异 <0.1%，从 0 起画 + 标注，避免自动缩放把噪声画成"权衡"
+        fig_tradeoff(df, "tradeoff_low.png",
+                     title="E3-low (underload)",
+                     zero_base=True,
+                     note="throughput flat: k=8/16/32 within noise; P99 E2E 4.70-4.73 s")
     else:
         raise SystemExit(f"不认识的 exp={args.exp}")
 
