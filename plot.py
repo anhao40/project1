@@ -174,7 +174,7 @@ def fig_compare(df, col, tag, xlabel, color_map=None):
 
 # ---------- E3：权衡曲线 ----------
 
-def fig_tradeoff(df):
+def fig_tradeoff(df, fname="tradeoff.png"):
     if "p99_e2e_ms" not in df.columns or not df["p99_e2e_ms"].notna().any():
         raise SystemExit("E3 的行没有 p99_e2e_ms，先跑 load_client.py")
 
@@ -193,7 +193,7 @@ def fig_tradeoff(df):
     ax.set_title("Throughput vs tail latency (trade-off)")
     ax.grid(alpha=0.3)
     ax.legend()
-    save(fig, "tradeoff.png")
+    save(fig, fname)
 
 
 def main():
@@ -218,6 +218,9 @@ def main():
         fig_compare(df, "quant", "E2-d", "quant", color_map=QUANT_COLORS)
     elif args.exp == "E3":
         fig_tradeoff(df)
+    elif args.exp == "E3b":
+        # 过载工况：高到达速率、更多请求，用来暴露"延迟爆炸"的拐点
+        fig_tradeoff(df, "tradeoff_overload.png")
     else:
         raise SystemExit(f"不认识的 exp={args.exp}")
 
